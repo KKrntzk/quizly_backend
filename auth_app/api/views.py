@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework.exceptions import ValidationError
 
 from .serializers import RegistrationSerializer, LoginSerializer
 
@@ -103,7 +104,7 @@ class CookieTokenRefreshView(TokenRefreshView):
 
         try:
             serializer.is_valid(raise_exception=True)
-        except (InvalidToken, TokenError):
+        except (InvalidToken, TokenError, ValidationError):
             return Response(
                 {"detail": "Refresh token invalid."},
                 status=status.HTTP_401_UNAUTHORIZED,
