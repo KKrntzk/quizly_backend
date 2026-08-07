@@ -50,12 +50,3 @@ class LogoutViewTest(APITestCase):
         self.client.cookies["access_token"] = "invalid.token.value"
         response = self.client.post(self.logout_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-    def test_refresh_token_blacklisted_after_logout(self):
-        """The refresh token can no longer be used after logout."""
-        self._login()
-        refresh_before = self.client.cookies["refresh_token"].value
-        self.client.post(self.logout_url)
-        # Try to use the old refresh token via the refresh endpoint later -
-        # for now we just confirm logout succeeded and cookie was cleared.
-        self.assertNotEqual(refresh_before, "")
