@@ -5,10 +5,16 @@ from rest_framework.permissions import IsAuthenticated
 
 from quiz_app.services import create_quiz_from_url
 from .serializers import QuizCreateSerializer, QuizSerializer
+from quiz_app.models import Quiz
 
 
-class QuizCreateView(APIView):
+class QuizListCreateView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        quizzes = Quiz.objects.filter(owner=request.user)
+        serializer = QuizSerializer(quizzes, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = QuizCreateSerializer(data=request.data)
