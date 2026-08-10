@@ -15,6 +15,18 @@ class QuizCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         url = serializer.validated_data["url"]
 
+        # try:
+        #     quiz = create_quiz_from_url(url, request.user)
+        # except ValueError:
+        #     return Response(
+        #         {"detail": "Invalid YouTube URL."},
+        #         status=status.HTTP_400_BAD_REQUEST,
+        #     )
+        # except Exception:
+        #     return Response(
+        #         {"detail": "Failed to generate quiz from the provided URL."},
+        #         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        #     )
         try:
             quiz = create_quiz_from_url(url, request.user)
         except ValueError:
@@ -22,9 +34,12 @@ class QuizCreateView(APIView):
                 {"detail": "Invalid YouTube URL."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except Exception:
+        except Exception as e:
+            import traceback
+
+            traceback.print_exc()
             return Response(
-                {"detail": "Failed to generate quiz from the provided URL."},
+                {"detail": f"Failed: {e}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
