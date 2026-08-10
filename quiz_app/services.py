@@ -8,6 +8,7 @@ import json
 
 from django.conf import settings
 from google import genai
+import shutil
 
 YOUTUBE_URL_TEMPLATE = "https://www.youtube.com/watch?v={video_id}"
 
@@ -115,3 +116,36 @@ def generate_quiz_data(transcript):
 
     cleaned = strip_markdown_fences(interaction.output_text)
     return json.loads(cleaned)
+
+
+def create_quiz_from_url(url, owner):
+    """Run the full pipeline and persist a quiz for the given owner."""
+    from quiz_app.models import Quiz, Question
+
+    video_id = extract_video_id(url)
+    normalized_url = build_youtube_url(video_id)
+
+    audio_path = download_audio(normalized_url)
+
+    try:
+        transcript = transcribe_audio(audio_path)
+        quiz_data = generate_quiz_data(transcript)
+    finally:
+        shutil.rmtree(os.path.dirname(audio_path), ignore_errors=True)
+
+    quiz = Quiz.objects.create(
+        owner=owner,
+        title=quiz_data["title"],
+        description=quiz_data.get("description", ""),
+        video_url=normalized_url,
+    )
+
+    for question in quiz_data["questions"]:
+        Question.objects.create(
+            quiz=quiz,
+            question_title=question["question_title"],
+            question_options=question["question_options"],
+            answer=question["answer"],
+        )
+
+    return quiz

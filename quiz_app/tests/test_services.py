@@ -1,12 +1,18 @@
 from django.test import TestCase
 
 from unittest.mock import patch, MagicMock
+from django.contrib.auth import get_user_model
+
 from quiz_app.services import (
     extract_video_id,
     build_youtube_url,
     strip_markdown_fences,
     generate_quiz_data,
+    create_quiz_from_url,
 )
+from quiz_app.models import Quiz, Question
+
+User = get_user_model()
 
 
 class ExtractVideoIdTest(TestCase):
@@ -121,3 +127,82 @@ class GenerateQuizDataTest(TestCase):
 
         with self.assertRaises(json.JSONDecodeError):
             generate_quiz_data("some transcript")
+
+
+class CreateQuizFromUrlTest(TestCase):
+    """Tests for the create_quiz_from_url orchestration."""
+
+    def setUp(self):
+        """Create a user and a fake quiz data payload."""
+        self.user = User.objects.create_user(
+            username="pipelineuser",
+            email="pipelineuser@mail.de",
+            password="securepassword123",
+        )
+        self.fake_quiz_data = {
+            "title": "Test Quiz",
+            "description": "A short description.",
+            "questions": [
+                {
+                    "question_title": "Question 1?",
+                    "question_options": ["A", "B", "C", "D"],
+                    "answer": "A",
+                },
+                {
+                    "question_title": "Question 2?",
+                    "question_options": ["W", "X", "Y", "Z"],
+                    "answer": "Z",
+                },
+            ],
+        }
+
+    @patch("quiz_app.services.generate_quiz_data")
+    @patch("quiz_app.services.transcribe_audio")
+    @patch("quiz_app.services.download_audio")
+    def test_creates_quiz_with_questions(
+        self, mock_download, mock_transcribe, mock_generate
+    ):
+        """The pipeline creates a quiz with all its questions."""
+        mock_download.return_value = "/tmp/fake/audio.mp3"
+        mock_transcribe.return_value = "a transcript"
+        mock_generate.return_value = self.fake_quiz_data
+
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        quiz = create_quiz_from_url(url, self.user)
+
+        self.assertEqual(quiz.title, "Test Quiz")
+        self.assertEqual(quiz.owner, self.user)
+        self.assertEqual(quiz.questions.count(), 2)
+
+    @patch("quiz_app.services.generate_quiz_data")
+    @patch("quiz_app.services.transcribe_audio")
+    @patch("quiz_app.services.download_audio")
+    def test_normalizes_video_url(self, mock_download, mock_transcribe, mock_generate):
+        """The stored video_url is normalized regardless of input format."""
+        mock_download.return_value = "/tmp/fake/audio.mp3"
+        mock_transcribe.return_value = "a transcript"
+        mock_generate.return_value = self.fake_quiz_data
+
+        url = "https://youtu.be/dQw4w9WgXcQ?t=42"
+        quiz = create_quiz_from_url(url, self.user)
+
+        self.assertEqual(quiz.video_url, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+    @patch("quiz_app.services.generate_quiz_data")
+    @patch("quiz_app.services.transcribe_audio")
+    @patch("quiz_app.services.download_audio")
+    def test_question_data_is_stored_correctly(
+        self, mock_download, mock_transcribe, mock_generate
+    ):
+        """Each question is stored with its options and answer."""
+        mock_download.return_value = "/tmp/fake/audio.mp3"
+        mock_transcribe.return_value = "a transcript"
+        mock_generate.return_value = self.fake_quiz_data
+
+        url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        quiz = create_quiz_from_url(url, self.user)
+
+        first = quiz.questions.first()
+        self.assertEqual(first.question_title, "Question 1?")
+        self.assertEqual(first.question_options, ["A", "B", "C", "D"])
+        self.assertEqual(first.answer, "A")
