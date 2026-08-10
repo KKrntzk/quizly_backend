@@ -4,6 +4,10 @@ import tempfile
 
 import whisper
 import yt_dlp
+import json
+
+from django.conf import settings
+from google import genai
 
 YOUTUBE_URL_TEMPLATE = "https://www.youtube.com/watch?v={video_id}"
 
@@ -60,3 +64,54 @@ def transcribe_audio(audio_path):
     model = whisper.load_model("turbo")
     result = model.transcribe(audio_path)
     return result["text"]
+
+
+QUIZ_PROMPT_TEMPLATE = """Based on the following transcript, generate a quiz in valid JSON format.
+The quiz must follow this exact structure:
+{{
+  "title": "Create a concise quiz title based on the topic of the transcript.",
+  "description": "Summarize the transcript in no more than 150 characters. Do not include any quiz questions or answers.",
+  "questions": [
+    {{
+      "question_title": "The question goes here.",
+      "question_options": ["Option A", "Option B", "Option C", "Option D"],
+      "answer": "The correct answer from the above options"
+    }},
+    ...
+    (exactly 10 questions)
+  ]
+}}
+Requirements:
+- Each question must have exactly 4 distinct answer options.
+- Only one correct answer is allowed per question, and it must be present in 'question_options'.
+- The output must be valid JSON and parsable as-is (e.g., using Python's json.loads).
+- Do not include explanations, comments, or any text outside the JSON.
+
+Transcript:
+{transcript}"""
+
+
+def strip_markdown_fences(text):
+    """Remove surrounding markdown code fences from a string if present."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines)
+    return cleaned.strip()
+
+
+def generate_quiz_data(transcript):
+    """Generate quiz data as a Python dict from a transcript using Gemini."""
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    prompt = QUIZ_PROMPT_TEMPLATE.format(transcript=transcript)
+
+    interaction = client.interactions.create(
+        model="gemini-3.6-flash",
+        input=prompt,
+    )
+
+    cleaned = strip_markdown_fences(interaction.output_text)
+    return json.loads(cleaned)
