@@ -7,6 +7,10 @@ from quiz_app.services import create_quiz_from_url
 from .serializers import QuizCreateSerializer, QuizSerializer
 from quiz_app.models import Quiz
 
+from rest_framework.generics import RetrieveUpdateDestroyAPIView
+
+from .permissions import IsOwner
+
 
 class QuizListCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -36,3 +40,10 @@ class QuizListCreateView(APIView):
 
         output = QuizSerializer(quiz)
         return Response(output.data, status=status.HTTP_201_CREATED)
+
+
+class QuizDetailView(RetrieveUpdateDestroyAPIView):
+    queryset = Quiz.objects.all()
+    serializer_class = QuizSerializer
+    permission_classes = [IsAuthenticated, IsOwner]
+    http_method_names = ["get", "patch", "delete"]
