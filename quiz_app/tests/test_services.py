@@ -3,10 +3,12 @@ from django.test import TestCase
 from unittest.mock import patch, MagicMock
 from django.contrib.auth import get_user_model
 
-from quiz_app.services import (
+from quiz_app.utils import (
     extract_video_id,
     build_youtube_url,
     strip_markdown_fences,
+)
+from quiz_app.services import (
     generate_quiz_data,
     create_quiz_from_url,
 )
