@@ -4,6 +4,8 @@ from quiz_app.models import Quiz, Question
 
 
 class QuestionSerializer(serializers.ModelSerializer):
+    """Serializes a single quiz question with its options and answer."""
+
     class Meta:
         model = Question
         fields = [
@@ -17,6 +19,8 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 class QuizSerializer(serializers.ModelSerializer):
+    """Serializes a quiz including its nested read-only questions."""
+
     questions = QuestionSerializer(many=True, read_only=True)
 
     class Meta:
@@ -34,4 +38,6 @@ class QuizSerializer(serializers.ModelSerializer):
 
 
 class QuizCreateSerializer(serializers.Serializer):
+    """Validates the YouTube URL for creating a new quiz."""
+
     url = serializers.URLField()
