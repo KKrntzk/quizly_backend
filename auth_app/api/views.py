@@ -1,81 +1,61 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenRefreshView
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from auth_app.utils import set_token_cookies
 from .serializers import RegistrationSerializer, LoginSerializer
 
 
 class RegistrationView(APIView):
+    """Registers a new user account."""
+
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """Validate the data and create a new user."""
         serializer = RegistrationSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(
-                {"detail": "User created successfully!"},
-                status=status.HTTP_201_CREATED,
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            {"detail": "User created successfully!"},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class LoginView(TokenObtainPairView):
+    """Authenticates a user and sets JWT cookies."""
+
     permission_classes = [AllowAny]
     serializer_class = LoginSerializer
 
     def post(self, request, *args, **kwargs):
+        """Validate credentials and set access and refresh cookies."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        access = data["access"]
-        refresh = data["refresh"]
-
         response = Response(
-            {
-                "detail": "Login successfully!",
-                "user": data["user"],
-            },
+            {"detail": "Login successfully!", "user": data["user"]},
             status=status.HTTP_200_OK,
         )
-
-        response.set_cookie(
-            key="access_token",
-            value=access,
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh,
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-        )
-
+        set_token_cookies(response, access=data["access"], refresh=data["refresh"])
         return response
 
 
 class LogoutView(APIView):
+    """Logs the user out by blacklisting the refresh token."""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        """Blacklist the refresh token and clear the auth cookies."""
         refresh_token = request.COOKIES.get("refresh_token")
-
-        if refresh_token:
-            try:
-                token = RefreshToken(refresh_token)
-                token.blacklist()
-            except TokenError:
-                pass
+        self._blacklist_token(refresh_token)
 
         response = Response(
             {
@@ -86,42 +66,46 @@ class LogoutView(APIView):
         )
         response.delete_cookie("access_token")
         response.delete_cookie("refresh_token")
-
         return response
+
+    def _blacklist_token(self, refresh_token):
+        """Blacklist the given refresh token, ignoring invalid ones."""
+        if not refresh_token:
+            return
+        try:
+            RefreshToken(refresh_token).blacklist()
+        except TokenError:
+            pass
 
 
 class CookieTokenRefreshView(TokenRefreshView):
-    def post(self, request, *args, **kwargs):
-        refresh_token = request.COOKIES.get("refresh_token")
+    """Refreshes the access token using the refresh token cookie."""
 
+    def post(self, request, *args, **kwargs):
+        """Read the refresh cookie and set a new access token cookie."""
+        refresh_token = request.COOKIES.get("refresh_token")
         if refresh_token is None:
             return Response(
                 {"detail": "Refresh token not found."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        serializer = self.get_serializer(data={"refresh": refresh_token})
-
-        try:
-            serializer.is_valid(raise_exception=True)
-        except (InvalidToken, TokenError, ValidationError):
+        access_token = self._get_new_access_token(refresh_token)
+        if access_token is None:
             return Response(
                 {"detail": "Refresh token invalid."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        access_token = serializer.validated_data["access"]
-
-        response = Response(
-            {"detail": "Token refreshed"},
-            status=status.HTTP_200_OK,
-        )
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-        )
-
+        response = Response({"detail": "Token refreshed"}, status=status.HTTP_200_OK)
+        set_token_cookies(response, access=access_token)
         return response
+
+    def _get_new_access_token(self, refresh_token):
+        """Return a new access token, or None if the refresh token is invalid."""
+        serializer = self.get_serializer(data={"refresh": refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except (InvalidToken, TokenError, ValidationError):
+            return None
+        return serializer.validated_data["access"]
