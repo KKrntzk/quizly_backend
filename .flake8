@@ -1,0 +1,8 @@
+[flake8]
+max-line-length = 100
+exclude =
+    .venv,
+    */migrations/*,
+    __pycache__
+per-file-ignores =
+    quiz_app/services.py:E501
