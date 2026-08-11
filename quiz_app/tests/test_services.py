@@ -12,7 +12,6 @@ from quiz_app.services import (
     generate_quiz_data,
     create_quiz_from_url,
 )
-from quiz_app.models import Quiz, Question
 
 User = get_user_model()
 

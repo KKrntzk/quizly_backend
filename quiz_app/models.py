@@ -16,6 +16,8 @@ class Quiz(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        verbose_name = "Quiz"
+        verbose_name_plural = "Quizzes"
 
     def __str__(self):
         return self.title
@@ -35,6 +37,8 @@ class Question(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+        verbose_name = "Question"
+        verbose_name_plural = "Questions"
 
     def __str__(self):
         return self.question_title
