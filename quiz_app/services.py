@@ -8,6 +8,7 @@ import yt_dlp
 from django.conf import settings
 from google import genai
 
+from quiz_app.models import Quiz, Question
 from quiz_app.utils import (
     extract_video_id,
     build_youtube_url,
@@ -82,11 +83,7 @@ def generate_quiz_data(transcript):
 
 def create_quiz_from_url(url, owner):
     """Run the full pipeline and persist a quiz for the given owner."""
-    from quiz_app.models import Quiz, Question
-
-    video_id = extract_video_id(url)
-    normalized_url = build_youtube_url(video_id)
-
+    normalized_url = build_youtube_url(extract_video_id(url))
     audio_path = download_audio(normalized_url)
 
     try:
@@ -95,19 +92,27 @@ def create_quiz_from_url(url, owner):
     finally:
         shutil.rmtree(os.path.dirname(audio_path), ignore_errors=True)
 
+    return _save_quiz(quiz_data, normalized_url, owner)
+
+
+def _save_quiz(quiz_data, video_url, owner):
+    """Persist a quiz and its questions from generated data."""
     quiz = Quiz.objects.create(
         owner=owner,
         title=quiz_data["title"],
         description=quiz_data.get("description", ""),
-        video_url=normalized_url,
+        video_url=video_url,
     )
+    _save_questions(quiz, quiz_data["questions"])
+    return quiz
 
-    for question in quiz_data["questions"]:
+
+def _save_questions(quiz, questions):
+    """Create question objects for the given quiz."""
+    for question in questions:
         Question.objects.create(
             quiz=quiz,
             question_title=question["question_title"],
             question_options=question["question_options"],
             answer=question["answer"],
         )
-
-    return quiz
